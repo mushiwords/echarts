@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+ 
+<head>
+  <meta charset="UTF-8">
+  <!-- import CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/element-ui/lib/theme-chalk/index.css">
+  <link rel="stylesheet" href="https://at.alicdn.com/t/font_1168282_mjcxxv5fjj.css"><!--手机管车-->
+  <title>TOF量方(多帧)</title>
+  <style>
+    body ,html,#app{
+      height: 100%;
+      width: 100%;
+      margin: 0;
+      overflow: hidden;
+      font-size: 14px;
+    }
+    .btn{
+      position: absolute;
+      top: 50px;
+      right: 50px;
+    }
+    button.search{
+      width: 60px;
+      height: 30px;
+      border-radius: 10px;
+      border: none;
+      color: #ffffff;
+      background-color: blueviolet;
+    }
+    .time{
+      position: absolute;
+      top:25%;
+      left: 50%;
+    }
+    .tiji{
+      position: absolute;
+      top:25%;
+      right: 20%;
+      width: 150px;
+      height: 250px;
+      background-color: #dddddd;
+    }
+    .progress{
+      position: absolute;
+      bottom: 50px;
+      width: 60%;
+      right: 20%;
+    }
+    .play{
+      /* position: absolute; */
+      /* right: -100px; */
+      /* bottom: 30px; */
+      display: inline-block;
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      background-color: rgba(83, 47, 230, 1);
+      box-shadow: 0 2px 4px 0 rgba(83, 47, 230, 0.4);
+      color: #fff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .iconfont {
+      font-size: 28px;
+    }
+    .iconxiasanjiaoxing {
+      transform: rotate(-90deg);
+    }
+    .iconpause {
+      font-size: 34px;
+    }
+    .el-slider__runway{
+      height: 15px;
+      background-color: #ffffff;
+      border-radius: 7.5px;
+    }
+    .el-slider__bar{
+      height: 15px;
+      border-radius: 7.5px;
+      background-color: blueviolet;
+    }
+    .el-slider__button-wrapper{
+      top: -11px;
+    }
+    .el-slider__button{
+      border:1px solid #ffffff;
+      background-color: blueviolet;
+    }
+    .up-next{
+      width: 100%;
+      text-align: center;
+    }
+  </style>
+ 
+  <!-- echarts&&echarts-gl -->
+  <script src="https://cdn.jsdelivr.net/npm/echarts@4.7.0/dist/echarts.js"></script>
+  <script src="https://www.echartsjs.com/zh/dist/echarts-gl.min.js"></script>
+  <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+</head>
+
+<body>
+  <div id="app">
+    <div id="main" style="width: 100%;height:100%;">
+    </div>
+    <div class="btn">
+      <el-date-picker
+        v-model="date"
+        type="date"
+        range-separator="至"
+        start-placeholder="开始日期"
+        end-placeholder="结束日期"
+        value-format="yyyy-MM-dd"
+        >
+      </el-date-picker>
+      <el-time-picker
+        is-range
+        v-model="value1"
+        range-separator="至"
+        start-placeholder="开始时间"
+        end-placeholder="结束时间"
+        placeholder="选择时间范围"
+        value-format="HH:mm:ss"
+        >
+      </el-time-picker>
+      <button class="search" @click="getTofData()">查询</button>
+    </div>
+    <div class="time">{{time}}</div>
+    <div class="tiji">
+      <div style="height: 30px;line-height: 30px;margin-left: 20px;">对应体积</div>
+      <div style="text-align: center;height: 220px;line-height: 200px;color:blueviolet;font-weight: bold;font-size: 30px;">{{volume}}m³</div>
+    </div>
+    <div class="progress">
+      <!-- <el-progress :stroke-width="20" color="blueviolet" :percentage="percentage" :show-text="false"></el-progress> -->
+      <el-slider v-model="nowIndex" :max='maxIndex' :show-tooltip="false" @change='initEcharts(tofData[nowIndex])'></el-slider>
+      <div class="up-next">
+        <div>
+          <button class="search" @click="up()">上一帧</button>
+          <div style="display: inline-block;">
+            <div class="play">
+              <i
+                @click="playHandler"
+                class="iconfont"
+                :class="[isPlay?'iconpause':'iconxiasanjiaoxing']"
+              ></i>
+            </div>
+          </div>
+          <button class="search" @click="next()">下一帧</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="https://unpkg.com/vue/dist/vue.js"></script>
+  <!-- import JavaScript -->
+  <script src="https://unpkg.com/element-ui/lib/index.js"></script>
+  <!-- 最新的压缩后的 JavaScript 文件 -->
+  <script src="https://unpkg.com/dayjs"></script>
+  <script type="text/javascript">
+    new Vue({
+      el: '#app',
+      data: function() {
+        return { 
+          tofData: null,
+          nowIndex:0,
+          maxIndex:0,
+          time:'',//测量体积的时间
+          volume:0,//体积
+          isPlay:false,
+          moveInter:'',
+          percentage:0,
+          value1:['00:00:00','12:00:00'],
+          date:dayjs().format('YYYY-MM-DD'),
+          condition:{
+            truckid: 111,
+            starttime : '',
+            endtime : '',
+          }
+        }
+      },
+      created() {
+        this.getTofData();
+      },
+      methods: {
+        up(){
+          if(this.nowIndex<=0){
+            this.nowIndex=0
+          }else{
+            this.nowIndex-=1
+          }
+          this.initEcharts(this.tofData[this.nowIndex]);
+        },
+        next(){
+          if(this.nowIndex>=this.maxIndex.length){
+            this.nowIndex=this.maxIndex.length
+          }else{
+            this.nowIndex+=1
+          }
+          this.initEcharts(this.tofData[this.nowIndex]);
+        },
+        getTofData(){
+          this.condition.starttime= this.date+' '+this.value1[0];
+          this.condition.endtime= this.date+' '+this.value1[1];
+          //this.condition.starttime=  "2020-07-01 00:00:00";
+          //this.condition.endtime=  "2020-07-01 12:00:00";
+         // axios.post('http://intelli-trailer.chinawayltd.com/tof/getLastTof',this.condition).then(response => {
+            // 请求成功
+            this.tofData = response.data.data;
+            this.initEcharts(this.tofData[this.nowIndex]);
+            //this.initEcharts([12,23,45],[123,434,555,6667,77],[13,45,67,88,999]);
+            this.nowIndex=0;
+            this.maxIndex=this.tofData.length-1;
+          })
+        },
+        playHandler(){
+          this.isPlay=!this.isPlay;
+          if(this.isPlay){
+            this.moveInter = setInterval(() => {
+              this.nowIndex += 1;
+              if(this.nowIndex>this.maxIndex){
+                clearInterval(this.moveInter);
+                this.isPlay=!this.isPlay;
+                return;
+              }
+              this.percentage=parseInt(this.nowIndex*100/this.maxIndex)
+              this.initEcharts(this.tofData[this.nowIndex]);
+              
+              
+            }, 1000);
+          }else{
+            clearInterval(this.moveInter)
+          }
+        },
+        initEcharts(tof=[]){
+          let timestamp = tof&&tof.timestamp;
+          this.volume = tof&&tof.volume || 0;
+          if(timestamp){
+            this.time=dayjs(timestamp*1000).format('YYYY-MM-DD HH:mm:ss')
+          }else{
+            this.time = '';
+          }
+          // 基于准备好的dom，初始化echarts实例
+          var myChart = echarts.init(document.getElementById('main'));
+          var data = []
+          let length=tof.length || 45;
+          let width=tof.width || 28;
+          let height=tof.height || 29;
+          let data2 = tof.tof || [];
+          let z=0;
+          for (let y =0; y<=width;y++){
+              for (let x =0; x<=length;x++){
+                  if(x==0 || y==0 || x==length || y==width){
+                      z=0
+                  }else if( data2[x] && data2[x][y]){
+                      z=data2[x][y];
+                      z=z>=0?z:0;
+                  }else{
+                      z=0
+                  }
+                  data.push([x,y,z])
+              }
+          }
+          myChart.setOption(option = {
+              tooltip: {
+                trigger: 'item',
+                    axisPointer: {
+                        type: 'line'
+                    },
+                    formatter: function(params) { //格式化tooltip
+                    console.log(params)
+                        let height =params.value[2]/10
+                        return '高度：'+height +'米';
+                    }
+              },
+              backgroundColor: '#fff',
+              xAxis3D: {
+                  type: 'value',
+                  min: 0,
+                  max: length,
+                  minInterval: 1
+              },
+              yAxis3D: {
+                  type: 'value',
+                  min: 0,
+                  max: width,
+                  minInterval: 1,
+              },
+              zAxis3D: {
+                  type: 'value',
+                  min: 0,
+                  max: height,
+                  minInterval: 1
+              },
+              // geo3D:{
+              //     show:true,
+              //     shading:'color',
+              // },
+              grid3D: {
+                  boxWidth:length,
+                  boxHeight:width,
+                  boxDepth:height,
+                  axisPointer: {
+                      show: true,
+                  },
+                  viewControl: {
+                      distance: 100,
+                      beta : -10,
+                      alpha :50
+                  },
+                  postEffect: {
+                      enable: true
+                  },
+                  light: {
+                      main: {
+                          shadow: false,
+                          intensity: 2
+                      },
+                      ambientCubemap: {
+                          // texture: ROOT_PATH + 'data-gl/asset/canyon.hdr',
+                          exposure: 2,
+                          diffuseIntensity: 0.2,
+                          specularIntensity: 1
+                      }
+                  }
+              },
+              series: [{
+                  type: 'surface',
+                  name:'',
+                  // silent: false,
+                  wireframe: {
+                      show: false
+                  },
+                  itemStyle: {
+                      color: 'rgb(73, 50, 199)'
+                  },
+                  data: data
+              }]
+          });
+        }
+      },
+    })
+
+  </script>
+</body>
+</html>
