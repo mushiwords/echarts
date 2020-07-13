@@ -1,0 +1,18 @@
+form{
+  position: relative;
+}
+
+.error{
+  display: none;
+}
+
+.error span{
+  margin: 0;
+  color: #4c4b55;
+  padding: 4px 4px 0 18px;
+  display: block;
+}
+
+.invalid{
+  border: 1px solid red !important;
+}
